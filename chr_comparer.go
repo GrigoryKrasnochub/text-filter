@@ -41,27 +41,27 @@ var RuChars = map[string][]string{
 	"я": {"я", "ya",},
 }
 
-type charsComparer struct {
+type CharsComparer struct {
 	charsMap map[rune][][]rune
 }
 
-func newCharsComparer() charsComparer {
+func NewCharsComparer() CharsComparer {
 	convertedMap := convertCompareChars(RuChars)
-	charsComparer := charsComparer{charsMap: make(map[rune][][]rune, len(convertedMap))}
+	charsComparer := CharsComparer{charsMap: make(map[rune][][]rune, len(convertedMap))}
 	for key, val := range convertedMap {
 		charsComparer.charsMap[key] = val
 	}
 	return charsComparer
 }
 
-func (cc *charsComparer) AddCharsMap(charsMap map[string][]string) {
+func (cc *CharsComparer) AddCharsMap(charsMap map[string][]string) {
 	convertedMap := convertCompareChars(charsMap)
 	for key, val := range convertedMap {
 		cc.charsMap[key] = val
 	}
 }
 
-func (cc *charsComparer) SetCharsMap(charsMap map[string][]string) {
+func (cc *CharsComparer) SetCharsMap(charsMap map[string][]string) {
 	cc.charsMap = convertCompareChars(charsMap)
 }
 
@@ -80,7 +80,7 @@ func convertCompareChars(charsMap map[string][]string) map[rune][][]rune {
 	return compChars
 }
 
-func (cc *charsComparer) compareChars(sample, compareTo rune, getNextChar func() rune) bool {
+func (cc *CharsComparer) compareChars(sample, compareTo rune, getNextChar func() rune) bool {
 	compareTo = unicode.ToLower(compareTo)
 	sample = unicode.ToLower(sample)
 	if _, ok := cc.charsMap[sample]; !ok {
@@ -106,7 +106,7 @@ func (cc *charsComparer) compareChars(sample, compareTo rune, getNextChar func()
 	return false
 }
 
-func (cc *charsComparer) getFirstLettersPossibleChars(words []Word) (result map[rune]struct{}) {
+func (cc *CharsComparer) getFirstLettersPossibleChars(words []Word) (result map[rune]struct{}) {
 	for _, word := range words {
 		if len(word.Word) < 1 {
 			continue
@@ -118,7 +118,7 @@ func (cc *charsComparer) getFirstLettersPossibleChars(words []Word) (result map[
 	return result
 }
 
-func (cc *charsComparer) getLetterPossibleChars(letter rune, resultMap map[rune]struct{}) map[rune]struct{} {
+func (cc *CharsComparer) getLetterPossibleChars(letter rune, resultMap map[rune]struct{}) map[rune]struct{} {
 	if resultMap == nil {
 		resultMap = make(map[rune]struct{})
 	}

@@ -6,7 +6,7 @@ import (
 	"unicode"
 )
 
-var linksRegex = regexp.MustCompile(`https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&/=]*)`)
+var linksRegex = regexp.MustCompile(`https?://(www\.)?[-a-zA-Zа-яА-ЯёЁ0-9@:%._+~#=]{1,256}\.[a-zA-Zа-яА-ЯёЁ0-9()]{1,6}([-a-zA-Zа-яА-ЯёЁ0-9()@:%_+.~#?&/=]*)`)
 var emailRegex = regexp.MustCompile(`(?:[a-zA-Z0-9!#$%&'*+/=?^_{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?|\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-zA-Z0-9-]*[a-zA-Z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])`)
 var repSym = regexp.MustCompile(`(?:[^a-zA-Z0-9а-яА-ЯёЁ\s]{3,})+`)
 var repNLine = regexp.MustCompile(`(?:\n(.{0,10})\n)+`)
@@ -16,25 +16,19 @@ var notLetter = regexp.MustCompile(`[^a-zA-Zа-яА-ЯёЁ]`)
 
 // Filter links
 func FilterLinks(str, replacing string) string {
-	if replacing != "" {
-		return linksRegex.ReplaceAllString(str, replacing)
-	}
-	return linksRegex.ReplaceAllString(str, "")
+	return linksRegex.ReplaceAllString(str, replacing)
 }
 
 // Filter emails
 func FilterEmails(str, replacing string) string {
-	if replacing != "" {
-		return emailRegex.ReplaceAllString(str, replacing)
-	}
-	return emailRegex.ReplaceAllString(str, "")
+	return emailRegex.ReplaceAllString(str, replacing)
 }
 
+//TODO бенчмарк померять что съест больше памяти make([]int32, 0, len(str)) или сразу перевести в руну
 // Filter same character to one (first of them). Case insensitive
-func FilterRepeatedCharsToOne(str string) string {
+func FilterRepeatedCharsToOne(str string, maxCount int) string {
 	result := make([]int32, 0, len(str))
 	counter := 0
-	maxCount := 3
 	charBuffer := make([]int32, 0, maxCount)
 	var lastChar int32
 	for i, chr := range str {
@@ -51,7 +45,7 @@ func FilterRepeatedCharsToOne(str string) string {
 				charBuffer = append(charBuffer, chr)
 			}
 		} else {
-			if counter < maxCount && len(charBuffer) > 0 {
+			if counter < maxCount {
 				result = append(result, charBuffer...)
 			}
 			result = append(result, chr)
@@ -59,6 +53,9 @@ func FilterRepeatedCharsToOne(str string) string {
 			charBuffer = charBuffer[:0]
 			counter = 0
 		}
+	}
+	if counter < maxCount {
+		result = append(result, charBuffer...)
 	}
 	return string(result)
 }
@@ -92,14 +89,14 @@ type Word struct {
 	lettersBetweenSymbols int
 	charsBetweenSymbols   int
 	startSymbol           int
-	status                WordCompareStatus
+	status                wordCompareStatus
 }
 
 func (w *Word) reset() {
 	w.lastActiveChar = 0
 	w.skipCheckIteration = 0
 	w.symbolCounter = 0
-	w.status = InProgress
+	w.status = inProgress
 	w.resetBetweenWordLetters()
 }
 
@@ -108,21 +105,21 @@ func (w *Word) resetBetweenWordLetters() {
 	w.charsBetweenSymbols = 0
 }
 
-type WordCompareStatus int
+type wordCompareStatus int
 
 const (
-	InProgress WordCompareStatus = iota
-	Failed
-	Success
+	inProgress wordCompareStatus = iota
+	failed
+	success
 )
 
 const (
-	WordLettersBetweenSymbols = 1
+	wordLettersBetweenSymbols = 1
 	//TODO 3 символа маловато, если буквы отделить 3 точками слово все равно вполне себе читается. возможно, имеет смысл снять ограничение
-	WordCharsBetweenSymbols = 3
+	wordCharsBetweenSymbols = 3
 )
 
-func (w *Word) compareChar(chr rune, chrComparer charsComparer, getNextChar func() rune) WordCompareStatus {
+func (w *Word) compareChar(chr rune, chrComparer CharsComparer, getNextChar func() rune) wordCompareStatus {
 	w.symbolCounter++
 	if w.skipCheckIteration > 0 {
 		w.skipCheckIteration--
@@ -138,7 +135,7 @@ func (w *Word) compareChar(chr rune, chrComparer charsComparer, getNextChar func
 		w.lastActiveChar++
 		if len(w.Word) == w.lastActiveChar {
 			w.lastActiveChar = 0
-			w.status = Success
+			w.status = success
 			return w.status
 		}
 	} else {
@@ -147,25 +144,25 @@ func (w *Word) compareChar(chr rune, chrComparer charsComparer, getNextChar func
 				w.skipCheckIteration++
 				return getNextChar()
 			}) {
-				w.status = InProgress
+				w.status = inProgress
 				return w.status
 			}
-			if notLetter.FindAllString(string(chr), -1) != nil && w.charsBetweenSymbols < WordCharsBetweenSymbols && w.lettersBetweenSymbols == 0 {
+			if notLetter.FindAllString(string(chr), -1) != nil && w.charsBetweenSymbols < wordCharsBetweenSymbols && w.lettersBetweenSymbols == 0 {
 				w.charsBetweenSymbols++
-				w.status = InProgress
+				w.status = inProgress
 				return w.status
 			}
-			if w.lettersBetweenSymbols < WordLettersBetweenSymbols && w.charsBetweenSymbols == 0 {
+			if w.lettersBetweenSymbols < wordLettersBetweenSymbols && w.charsBetweenSymbols == 0 {
 				w.lettersBetweenSymbols++
-				w.status = InProgress
+				w.status = inProgress
 				return w.status
 			}
 		}
 		w.reset()
-		w.status = Failed
+		w.status = failed
 		return w.status
 	}
-	w.status = InProgress
+	w.status = inProgress
 	return w.status
 }
 
@@ -211,18 +208,24 @@ func (w *Word) compareWithExcludePrev(str []rune) bool {
 
 type WordFilter struct {
 	words             []Word
-	CharsComparer     charsComparer
+	CharsComparer     CharsComparer
 	wordsFirstChrsMap map[rune]struct{}
 }
 
 func NewWordFilter() WordFilter {
 	return WordFilter{
-		CharsComparer: newCharsComparer(),
+		CharsComparer: NewCharsComparer(),
+	}
+}
+
+func (wf *WordFilter) resetAllWords() {
+	for i, _ := range wf.words {
+		wf.words[i].reset()
 	}
 }
 
 //TODO возможно лучше принимать строку?
-func (wf *WordFilter) addWord(word []rune, excludedPrev [][]rune) {
+func (wf *WordFilter) AddWord(word []rune, excludedPrev [][]rune) {
 	sort.SliceStable(excludedPrev, func(i, j int) bool {
 		return len(excludedPrev[i]) > len(excludedPrev[j])
 	})
@@ -233,7 +236,14 @@ func (wf *WordFilter) addWord(word []rune, excludedPrev [][]rune) {
 	wf.wordsFirstChrsMap = wf.CharsComparer.getLetterPossibleChars(word[0], wf.wordsFirstChrsMap)
 }
 
-func (wf *WordFilter) FilterWords(str string) string {
+type DetectedWord struct {
+	OriginalWord string
+	Beginning    string
+	Word         string
+	Ending       string
+}
+
+func (wf *WordFilter) FilterWords(str string, replaceWord func(DetectedWord) string) string {
 	if len(wf.words) == 0 {
 		return str
 	}
@@ -242,56 +252,65 @@ func (wf *WordFilter) FilterWords(str string) string {
 	var chrBuf []rune
 	runeStr := []rune(str)
 	wordStartSymb := 0
-	filterWordEnding := false
+	detectWord := false
+	detectedWord := DetectedWord{}
 	for strChrNumb, chr := range runeStr {
+		positionBetweenWords := false
 		if _, ok := wf.wordsFirstChrsMap[chr]; !ok && notLetter.MatchString(string(chr)) {
 			wordStartSymb = strChrNumb + 1
-			filterWordEnding = false
+			positionBetweenWords = true
+			if detectWord {
+				result += replaceWord(detectedWord)
+				detectWord = false
+			}
 		}
-		if filterWordEnding {
+		if detectWord {
+			detectedWord.Ending += string(chr)
 			continue
 		}
+
+		wordsNotInProgress := true
 		chrBuf = append(chrBuf, chr)
-		chrBufToResult := true
-		lastIter := len([]rune(str))-1 == strChrNumb
 		for i := range wf.words {
-			result := wf.words[i].compareChar(chr, wf.CharsComparer, func() rune {
+			compareStatus := wf.words[i].compareChar(chr, wf.CharsComparer, func() rune {
 				return runeStr[strChrNumb+1]
 			})
-			switch result {
-			case Success:
+			switch compareStatus {
+			case success:
 				if !wf.words[i].compareWithExcludePrev(chrBuf[:len(chrBuf)-wf.words[i].symbolCounter]) {
-					wordLen := wf.words[i].symbolCounter
 					wordLenFromWordStart := strChrNumb - wf.words[i].startSymbol + 1
-					if len(chrBuf) >= wordLenFromWordStart && wordLen < wordLenFromWordStart {
-						wordLen = wordLenFromWordStart
-					}
-					chrBuf = chrBuf[:len(chrBuf)-wordLen]
-					chrBufToResult = true
-					filterWordEnding = true
+					//TODO возможны ошибки в разделении при большом количестве искомых слов. Когда chrBuf будет длиннее одного слова
+					detectedWord.Beginning = string(chrBuf[len(chrBuf)-wordLenFromWordStart : len(chrBuf)-wf.words[i].symbolCounter])
+					detectedWord.Word = string(chrBuf[len(chrBuf)-wf.words[i].symbolCounter:])
+					detectedWord.OriginalWord = string(wf.words[i].Word)
+
+					chrBuf = chrBuf[:len(chrBuf)-wordLenFromWordStart]
+					wordsNotInProgress = true
+					detectWord = true
 				}
-				//Избавиться от этого сброса
-				wf.words[i].reset()
-			case InProgress:
-				chrBufToResult = false
+				wf.resetAllWords()
+			case inProgress:
+				wordsNotInProgress = false
 				if wf.words[i].symbolCounter == 1 {
 					wf.words[i].startSymbol = wordStartSymb
 				}
 			}
-			if result == Success {
+			if compareStatus == success {
 				break
 			}
 		}
-		if (chrBufToResult && wordStartSymb > strChrNumb) || lastIter {
+		if wordsNotInProgress && positionBetweenWords {
 			result += string(chrBuf)
 			chrBuf = chrBuf[:0]
 		}
 	}
+	result += string(chrBuf)
+	if detectWord {
+		result += replaceWord(detectedWord)
+	}
 
 	//Избавиться от этого сброса
-	for i := range wf.words {
-		wf.words[i].reset()
-	}
+	wf.resetAllWords()
 
 	return result
 }
