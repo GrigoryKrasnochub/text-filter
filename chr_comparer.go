@@ -16,7 +16,7 @@ var RuChars = map[string][]string{
 	"ж": {"ж", "zh", "*",},
 	"з": {"з", "3", "z",},
 	"и": {"и", "u", "i",},
-	"й": {"й", "u", "y", "i",},
+	"й": {"й", "u", "i",},
 	"к": {"к", "k", "i{", "|{",},
 	"л": {"л", "l", "ji", "|\\", "/\\",},
 	"м": {"м", "m",},
@@ -106,7 +106,7 @@ func (cc *CharsComparer) compareChars(sample, compareTo rune, getNextChar func()
 	return false
 }
 
-func (cc *CharsComparer) getFirstLettersPossibleChars(words []Word) (result map[rune]struct{}) {
+func (cc *CharsComparer) getLettersPossibleChars(words []Word, result map[rune]struct{}) map[rune]struct{} {
 	for _, word := range words {
 		if len(word.Word) < 1 {
 			continue

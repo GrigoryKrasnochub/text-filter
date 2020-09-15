@@ -134,7 +134,6 @@ func (w *Word) compareChar(chr rune, chrComparer CharsComparer, getNextChar func
 		w.resetBetweenWordLetters()
 		w.lastActiveChar++
 		if len(w.Word) == w.lastActiveChar {
-			w.lastActiveChar = 0
 			w.status = success
 			return w.status
 		}
@@ -218,14 +217,47 @@ func NewWordFilter() WordFilter {
 	}
 }
 
+func (wf *WordFilter) ResetWords() {
+	wf.words = nil
+	wf.wordsFirstChrsMap = nil
+}
+
 func (wf *WordFilter) resetAllWords() {
 	for i, _ := range wf.words {
 		wf.words[i].reset()
 	}
 }
 
-//TODO возможно лучше принимать строку?
-func (wf *WordFilter) AddWord(word []rune, excludedPrev [][]rune) {
+type UserWord struct {
+	Word         string
+	ExcludedPrev []string
+}
+
+func (wf *WordFilter) AddWords(words []UserWord) {
+	wordsSlice := make([]Word, len(words), len(words))
+	for i, word := range words {
+		formattedExcludePrev := make([][]rune, len(word.ExcludedPrev), len(word.ExcludedPrev))
+		for j, prev := range word.ExcludedPrev {
+			formattedExcludePrev[j] = []rune(prev)
+		}
+		wordsSlice[i] = Word{
+			ExcludePrev: formattedExcludePrev,
+			Word:        []rune(word.Word),
+		}
+	}
+	wf.words = append(wf.words, wordsSlice...)
+	wf.wordsFirstChrsMap = wf.CharsComparer.getLettersPossibleChars(wordsSlice, wf.wordsFirstChrsMap)
+}
+
+func (wf *WordFilter) AddWord(word string, excludedPrev []string) {
+	formattedExcludePrev := make([][]rune, len(excludedPrev), len(excludedPrev))
+	for i, prev := range excludedPrev {
+		formattedExcludePrev[i] = []rune(prev)
+	}
+	wf.addWord([]rune(word), formattedExcludePrev)
+}
+
+func (wf *WordFilter) addWord(word []rune, excludedPrev [][]rune) {
 	sort.SliceStable(excludedPrev, func(i, j int) bool {
 		return len(excludedPrev[i]) > len(excludedPrev[j])
 	})
@@ -279,7 +311,7 @@ func (wf *WordFilter) FilterWords(str string, replaceWord func(DetectedWord) str
 			case success:
 				if !wf.words[i].compareWithExcludePrev(chrBuf[:len(chrBuf)-wf.words[i].symbolCounter]) {
 					wordLenFromWordStart := strChrNumb - wf.words[i].startSymbol + 1
-					//TODO возможны ошибки в разделении при большом количестве искомых слов. Когда chrBuf будет длиннее одного слова
+
 					detectedWord.Beginning = string(chrBuf[len(chrBuf)-wordLenFromWordStart : len(chrBuf)-wf.words[i].symbolCounter])
 					detectedWord.Word = string(chrBuf[len(chrBuf)-wf.words[i].symbolCounter:])
 					detectedWord.OriginalWord = string(wf.words[i].Word)
@@ -309,7 +341,6 @@ func (wf *WordFilter) FilterWords(str string, replaceWord func(DetectedWord) str
 		result += replaceWord(detectedWord)
 	}
 
-	//Избавиться от этого сброса
 	wf.resetAllWords()
 
 	return result
