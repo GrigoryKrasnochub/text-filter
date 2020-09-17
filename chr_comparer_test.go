@@ -24,7 +24,7 @@ func TestCompareChars(t *testing.T) {
 		{char: "д", compareTo: "b", result: false},
 		{char: "ы", compareTo: "b|", result: true},
 	}
-	cc := NewCharsComparer()
+	cc := NewCharsComparer(RuChars)
 	for i, tcase := range cases {
 		a.Equal(tcase.result, cc.compareChars([]rune(tcase.char)[0], []rune(tcase.compareTo)[0], func() rune {
 			return []rune(tcase.compareTo)[1]

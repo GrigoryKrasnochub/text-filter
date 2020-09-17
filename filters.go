@@ -4,15 +4,17 @@ import (
 	"regexp"
 	"sort"
 	"unicode"
+	"unicode/utf8"
 )
 
-var linksRegex = regexp.MustCompile(`https?://(www\.)?[-a-zA-Zа-яА-ЯёЁ0-9@:%._+~#=]{1,256}\.[a-zA-Zа-яА-ЯёЁ0-9()]{1,6}([-a-zA-Zа-яА-ЯёЁ0-9()@:%_+.~#?&/=]*)`)
-var emailRegex = regexp.MustCompile(`(?:[a-zA-Z0-9!#$%&'*+/=?^_{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?|\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-zA-Z0-9-]*[a-zA-Z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])`)
-var repSym = regexp.MustCompile(`(?:[^a-zA-Z0-9а-яА-ЯёЁ\s]{3,})+`)
-var repNLine = regexp.MustCompile(`(?:\n(.{0,10})\n)+`)
-var repWhiteSpc = regexp.MustCompile(`(?:\s{2,})`)
-var chainSymAndNum = regexp.MustCompile(`((?:([^a-zA-Z0-9а-яА-ЯёЁ\s]*\d*)*\d{2,}([^a-zA-Z0-9а-яА-ЯёЁ\s]*\d*)*[^a-zA-Z0-9а-яА-ЯёЁ\s]{2,}([^a-zA-Z0-9а-яА-ЯёЁ\s]*\d*)*)|(?:([^a-zA-Z0-9а-яА-ЯёЁ\s]*\d*)*[^a-zA-Z0-9а-яА-ЯёЁ\s]{2,}([^a-zA-Z0-9а-яА-ЯёЁ\s]*\d*)*\d{2,}([^a-zA-Z0-9а-яА-ЯёЁ\s]*\d*)*))+`)
-var notLetter = regexp.MustCompile(`[^a-zA-Zа-яА-ЯёЁ]`)
+var (
+	linksRegex     = regexp.MustCompile(`https?://(www\.)?[-a-zA-Zа-яА-ЯёЁ0-9@:%._+~#=]{1,256}\.[a-zA-Zа-яА-ЯёЁ0-9()]{1,6}([-a-zA-Zа-яА-ЯёЁ0-9()@:%_+.~#?&/=]*)`)
+	emailRegex     = regexp.MustCompile(`(?:[a-zA-Z0-9!#$%&'*+/=?^_{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?|\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-zA-Z0-9-]*[a-zA-Z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])`)
+	repSym         = regexp.MustCompile(`(?:[^a-zA-Z0-9а-яА-ЯёЁ\s]{3,})+`)
+	repNLine       = regexp.MustCompile(`(?:\n(.{0,10})\n)+`)
+	repWhiteSpc    = regexp.MustCompile(`(?:\s{2,})`)
+	chainSymAndNum = regexp.MustCompile(`((?:([^a-zA-Z0-9а-яА-ЯёЁ\s]*\d*)*\d{2,}([^a-zA-Z0-9а-яА-ЯёЁ\s]*\d*)*[^a-zA-Z0-9а-яА-ЯёЁ\s]{2,}([^a-zA-Z0-9а-яА-ЯёЁ\s]*\d*)*)|(?:([^a-zA-Z0-9а-яА-ЯёЁ\s]*\d*)*[^a-zA-Z0-9а-яА-ЯёЁ\s]{2,}([^a-zA-Z0-9а-яА-ЯёЁ\s]*\d*)*\d{2,}([^a-zA-Z0-9а-яА-ЯёЁ\s]*\d*)*))+`)
+)
 
 // Filter links
 func FilterLinks(str, replacing string) string {
@@ -27,7 +29,7 @@ func FilterEmails(str, replacing string) string {
 //TODO бенчмарк померять что съест больше памяти make([]int32, 0, len(str)) или сразу перевести в руну
 // Filter same character to one (first of them). Case insensitive
 func FilterRepeatedCharsToOne(str string, maxCount int) string {
-	result := make([]int32, 0, len(str))
+	result := make([]int32, 0, utf8.RuneCountInString(str))
 	counter := 0
 	charBuffer := make([]int32, 0, maxCount)
 	var lastChar int32
@@ -146,7 +148,7 @@ func (w *Word) compareChar(chr rune, chrComparer CharsComparer, getNextChar func
 				w.status = inProgress
 				return w.status
 			}
-			if notLetter.FindAllString(string(chr), -1) != nil && w.charsBetweenSymbols < wordCharsBetweenSymbols && w.lettersBetweenSymbols == 0 {
+			if !unicode.IsLetter(chr) && w.charsBetweenSymbols < wordCharsBetweenSymbols && w.lettersBetweenSymbols == 0 {
 				w.charsBetweenSymbols++
 				w.status = inProgress
 				return w.status
@@ -211,9 +213,10 @@ type WordFilter struct {
 	wordsFirstChrsMap map[rune]struct{}
 }
 
-func NewWordFilter() WordFilter {
+func NewWordFilter(charsMap map[string][]string) WordFilter {
 	return WordFilter{
-		CharsComparer: NewCharsComparer(),
+		CharsComparer:     NewCharsComparer(charsMap),
+		wordsFirstChrsMap: make(map[rune]struct{}, 0),
 	}
 }
 
@@ -234,9 +237,9 @@ type UserWord struct {
 }
 
 func (wf *WordFilter) AddWords(words []UserWord) {
-	wordsSlice := make([]Word, len(words), len(words))
+	wordsSlice := make([]Word, len(words))
 	for i, word := range words {
-		formattedExcludePrev := make([][]rune, len(word.ExcludedPrev), len(word.ExcludedPrev))
+		formattedExcludePrev := make([][]rune, len(word.ExcludedPrev))
 		for j, prev := range word.ExcludedPrev {
 			formattedExcludePrev[j] = []rune(prev)
 		}
@@ -246,11 +249,11 @@ func (wf *WordFilter) AddWords(words []UserWord) {
 		}
 	}
 	wf.words = append(wf.words, wordsSlice...)
-	wf.wordsFirstChrsMap = wf.CharsComparer.getLettersPossibleChars(wordsSlice, wf.wordsFirstChrsMap)
+	wf.wordsFirstChrsMap = wf.CharsComparer.fillLettersPossibleChars(wordsSlice, wf.wordsFirstChrsMap)
 }
 
 func (wf *WordFilter) AddWord(word string, excludedPrev []string) {
-	formattedExcludePrev := make([][]rune, len(excludedPrev), len(excludedPrev))
+	formattedExcludePrev := make([][]rune, len(excludedPrev))
 	for i, prev := range excludedPrev {
 		formattedExcludePrev[i] = []rune(prev)
 	}
@@ -265,7 +268,7 @@ func (wf *WordFilter) addWord(word []rune, excludedPrev [][]rune) {
 		ExcludePrev: excludedPrev,
 		Word:        word,
 	})
-	wf.wordsFirstChrsMap = wf.CharsComparer.getLetterPossibleChars(word[0], wf.wordsFirstChrsMap)
+	wf.wordsFirstChrsMap = wf.CharsComparer.fillLetterPossibleChars(word[0], wf.wordsFirstChrsMap)
 }
 
 type DetectedWord struct {
@@ -275,29 +278,32 @@ type DetectedWord struct {
 	Ending       string
 }
 
+//TODO сделать tread safe
 func (wf *WordFilter) FilterWords(str string, replaceWord func(DetectedWord) string) string {
 	if len(wf.words) == 0 {
 		return str
 	}
 
-	result := ""
+	result := make([]rune, 0);
 	var chrBuf []rune
 	runeStr := []rune(str)
 	wordStartSymb := 0
 	detectWord := false
 	detectedWord := DetectedWord{}
+	detectedWordEnding :=  make([]rune, 0)
 	for strChrNumb, chr := range runeStr {
 		positionBetweenWords := false
-		if _, ok := wf.wordsFirstChrsMap[chr]; !ok && notLetter.MatchString(string(chr)) {
+		if _, ok := wf.wordsFirstChrsMap[chr]; !ok && !unicode.IsLetter(chr) {
 			wordStartSymb = strChrNumb + 1
 			positionBetweenWords = true
 			if detectWord {
-				result += replaceWord(detectedWord)
+				detectedWord.Ending = string(detectedWordEnding)
+				result = append(result, []rune(replaceWord(detectedWord))...)
 				detectWord = false
 			}
 		}
 		if detectWord {
-			detectedWord.Ending += string(chr)
+			detectedWordEnding = append(detectedWordEnding, chr)
 			continue
 		}
 
@@ -332,16 +338,18 @@ func (wf *WordFilter) FilterWords(str string, replaceWord func(DetectedWord) str
 			}
 		}
 		if wordsNotInProgress && positionBetweenWords {
-			result += string(chrBuf)
+			result =  append(result, chrBuf...)
 			chrBuf = chrBuf[:0]
 		}
 	}
-	result += string(chrBuf)
+
+	result =  append(result, chrBuf...)
 	if detectWord {
-		result += replaceWord(detectedWord)
+		detectedWord.Ending = string(detectedWordEnding)
+		result = append(result, []rune(replaceWord(detectedWord))...)
 	}
 
 	wf.resetAllWords()
 
-	return result
+	return string(result)
 }

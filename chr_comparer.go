@@ -5,52 +5,15 @@ import (
 	"unicode"
 )
 
-var RuChars = map[string][]string{
-	"a": {"а", "a", "@",},
-	"б": {"б", "6", "b",},
-	"в": {"в", "b", "v",},
-	"г": {"г", "r", "g",},
-	"д": {"д", "d", "g",},
-	"e": {"е", "e",},
-	"ё": {"ё", "е", "e",},
-	"ж": {"ж", "zh", "*",},
-	"з": {"з", "3", "z",},
-	"и": {"и", "u", "i",},
-	"й": {"й", "u", "i",},
-	"к": {"к", "k", "i{", "|{",},
-	"л": {"л", "l", "ji", "|\\", "/\\",},
-	"м": {"м", "m",},
-	"н": {"н", "h", "n",},
-	"о": {"о", "o", "0",},
-	"п": {"п", "n", "p",},
-	"р": {"р", "r", "p",},
-	"с": {"с", "c", "s",},
-	"т": {"т", "m", "t",},
-	"у": {"у", "y", "u",},
-	"ф": {"ф", "f",},
-	"х": {"х", "x", "h", "к", "k", "}{", "][",},
-	"ц": {"ц", "с", "u",},
-	"ч": {"ч", "ch",},
-	"ш": {"ш", "sh",},
-	"щ": {"щ", "sch",},
-	"ь": {"ь", "b",},
-	"ы": {"ы", "bi", "b|", "ьi", "ь|",},
-	"ъ": {"ъ",},
-	"э": {"э", "е", "e",},
-	"ю": {"ю", "io",},
-	"я": {"я", "ya",},
-}
-
 type CharsComparer struct {
 	charsMap map[rune][][]rune
 }
 
-func NewCharsComparer() CharsComparer {
-	convertedMap := convertCompareChars(RuChars)
-	charsComparer := CharsComparer{charsMap: make(map[rune][][]rune, len(convertedMap))}
-	for key, val := range convertedMap {
-		charsComparer.charsMap[key] = val
+func NewCharsComparer(charsMap map[string][]string) CharsComparer {
+	charsComparer := CharsComparer{
+		charsMap: make(map[rune][][]rune, len(charsMap)),
 	}
+	charsComparer.AddCharsMap(charsMap)
 	return charsComparer
 }
 
@@ -106,31 +69,24 @@ func (cc *CharsComparer) compareChars(sample, compareTo rune, getNextChar func()
 	return false
 }
 
-func (cc *CharsComparer) getLettersPossibleChars(words []Word, result map[rune]struct{}) map[rune]struct{} {
+func (cc *CharsComparer) fillLettersPossibleChars(words []Word, result map[rune]struct{}) map[rune]struct{} {
 	for _, word := range words {
 		if len(word.Word) < 1 {
 			continue
 		}
-
-		result = cc.getLetterPossibleChars(word.Word[0], result)
+		result = cc.fillLetterPossibleChars(word.Word[0], result)
 	}
 
 	return result
 }
 
-func (cc *CharsComparer) getLetterPossibleChars(letter rune, resultMap map[rune]struct{}) map[rune]struct{} {
-	if resultMap == nil {
-		resultMap = make(map[rune]struct{})
-	}
-
-	LetterChrs := cc.charsMap[letter]
-	for _, chr := range LetterChrs {
+func (cc *CharsComparer) fillLetterPossibleChars(letter rune, resultMap map[rune]struct{}) map[rune]struct{} {
+	letterChrs := cc.charsMap[letter]
+	for _, chr := range letterChrs {
 		if len(chr) < 1 {
 			continue
 		}
-		if _, ok := resultMap[chr[0]]; !ok {
-			resultMap[chr[0]] = struct{}{}
-		}
+		resultMap[chr[0]] = struct{}{}
 	}
 
 	return resultMap
