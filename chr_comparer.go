@@ -69,12 +69,12 @@ func (cc *CharsComparer) compareChars(sample, compareTo rune, getNextChar func()
 	return false
 }
 
-func (cc *CharsComparer) fillLettersPossibleChars(words []Word, result map[rune]struct{}) map[rune]struct{} {
+func (cc *CharsComparer) fillLettersPossibleChars(words []preparedWord, result map[rune]struct{}) map[rune]struct{} {
 	for _, word := range words {
-		if len(word.Word) < 1 {
+		if len(word.searchedWord) < 1 {
 			continue
 		}
-		result = cc.fillLetterPossibleChars(word.Word[0], result)
+		result = cc.fillLetterPossibleChars(word.searchedWord[0], result)
 	}
 
 	return result

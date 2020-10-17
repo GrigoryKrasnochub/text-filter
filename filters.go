@@ -26,7 +26,6 @@ func FilterEmails(str, replacing string) string {
 	return emailRegex.ReplaceAllString(str, replacing)
 }
 
-//TODO бенчмарк померять что съест больше памяти make([]int32, 0, len(str)) или сразу перевести в руну
 // Filter same character to one (first of them). Case insensitive
 func FilterRepeatedCharsToOne(str string, maxCount int) string {
 	result := make([]int32, 0, utf8.RuneCountInString(str))
@@ -81,10 +80,19 @@ func FilterRepeatedNewLines(str string) string {
 	return repNLine.ReplaceAllString(str, " $1")
 }
 
-//TODO ExcludePast
-type Word struct {
-	ExcludePrev           [][]rune
-	Word                  []rune
+type excludedPast struct {
+	excludedPart []rune
+	status       bool
+}
+
+type preparedWord struct {
+	excludePrev  [][]rune
+	excludePast  []excludedPast
+	searchedWord []rune
+}
+
+type wordProcessor struct {
+	preparedWord
 	lastActiveChar        int
 	skipCheckIteration    int
 	symbolCounter         int
@@ -94,7 +102,7 @@ type Word struct {
 	status                wordCompareStatus
 }
 
-func (w *Word) reset() {
+func (w *wordProcessor) reset() {
 	w.lastActiveChar = 0
 	w.skipCheckIteration = 0
 	w.symbolCounter = 0
@@ -102,9 +110,15 @@ func (w *Word) reset() {
 	w.resetBetweenWordLetters()
 }
 
-func (w *Word) resetBetweenWordLetters() {
+func (w *wordProcessor) resetBetweenWordLetters() {
 	w.lettersBetweenSymbols = 0
 	w.charsBetweenSymbols = 0
+}
+
+func resetAllWords(words []wordProcessor) {
+	for i, _ := range words {
+		words[i].reset()
+	}
 }
 
 type wordCompareStatus int
@@ -121,27 +135,27 @@ const (
 	wordCharsBetweenSymbols = 3
 )
 
-func (w *Word) compareChar(chr rune, chrComparer CharsComparer, getNextChar func() rune) wordCompareStatus {
+func (w *wordProcessor) compareChar(chr rune, chrComparer CharsComparer, getNextChar func() rune) wordCompareStatus {
 	w.symbolCounter++
 	if w.skipCheckIteration > 0 {
 		w.skipCheckIteration--
 		return w.status
 	}
 
-	result := chrComparer.compareChars(w.Word[w.lastActiveChar], chr, func() rune {
+	result := chrComparer.compareChars(w.searchedWord[w.lastActiveChar], chr, func() rune {
 		w.skipCheckIteration++
 		return getNextChar()
 	})
 	if result {
 		w.resetBetweenWordLetters()
 		w.lastActiveChar++
-		if len(w.Word) == w.lastActiveChar {
+		if len(w.searchedWord) == w.lastActiveChar {
 			w.status = success
 			return w.status
 		}
 	} else {
 		if w.symbolCounter > 1 {
-			if w.lastActiveChar > 0 && chrComparer.compareChars(w.Word[w.lastActiveChar-1], chr, func() rune {
+			if w.lastActiveChar > 0 && chrComparer.compareChars(w.searchedWord[w.lastActiveChar-1], chr, func() rune {
 				w.skipCheckIteration++
 				return getNextChar()
 			}) {
@@ -167,13 +181,13 @@ func (w *Word) compareChar(chr rune, chrComparer CharsComparer, getNextChar func
 	return w.status
 }
 
-func (w *Word) compareWithExcludePrev(str []rune) bool {
-	if len(w.ExcludePrev) < 1 {
+func (w *wordProcessor) compareWithExcludePrev(str []rune) bool {
+	if len(w.excludePrev) < 1 {
 		return false
 	}
 
 	strStartChr := 0
-	for _, excludedPrevRuns := range w.ExcludePrev {
+	for _, excludedPrevRuns := range w.excludePrev {
 		strStartChr = len(str) - len(excludedPrevRuns)
 		if strStartChr >= 0 {
 			break
@@ -183,12 +197,12 @@ func (w *Word) compareWithExcludePrev(str []rune) bool {
 		return false
 	}
 
-	skipExcludePrev := make([]bool, len(w.ExcludePrev))
+	skipExcludePrev := make([]bool, len(w.excludePrev))
 	str = str[strStartChr:]
 	strLen := len(str)
 	for i := 0; i < len(str); i++ {
 		strLen--
-		for j, excludedPrevRuns := range w.ExcludePrev {
+		for j, excludedPrevRuns := range w.excludePrev {
 			if skipExcludePrev[j] == true {
 				continue
 			}
@@ -207,8 +221,12 @@ func (w *Word) compareWithExcludePrev(str []rune) bool {
 	return false
 }
 
+//func (w *wordProcessor) compareWithExcludedPast(chr rune, symbCount int) {
+//	for _,
+//}
+
 type WordFilter struct {
-	words             []Word
+	words             []preparedWord
 	CharsComparer     CharsComparer
 	wordsFirstChrsMap map[rune]struct{}
 }
@@ -225,27 +243,29 @@ func (wf *WordFilter) ResetWords() {
 	wf.wordsFirstChrsMap = nil
 }
 
-func (wf *WordFilter) resetAllWords() {
-	for i, _ := range wf.words {
-		wf.words[i].reset()
-	}
-}
-
 type UserWord struct {
 	Word         string
 	ExcludedPrev []string
+	ExcludedPast []string
 }
 
-func (wf *WordFilter) AddWords(words []UserWord) {
-	wordsSlice := make([]Word, len(words))
-	for i, word := range words {
-		formattedExcludePrev := make([][]rune, len(word.ExcludedPrev))
-		for j, prev := range word.ExcludedPrev {
+func (wf *WordFilter) AddWords(userWords []UserWord) {
+	wordsSlice := make([]preparedWord, len(userWords))
+	for i, userWord := range userWords {
+		formattedExcludePrev := make([][]rune, len(userWord.ExcludedPrev))
+		for j, prev := range userWord.ExcludedPrev {
 			formattedExcludePrev[j] = []rune(prev)
 		}
-		wordsSlice[i] = Word{
-			ExcludePrev: formattedExcludePrev,
-			Word:        []rune(word.Word),
+		excludedPastParts := make([]excludedPast, 0, len(userWords))
+		for _, excludedPart := range userWords[i].ExcludedPast {
+			excludedPastParts = append(excludedPastParts, excludedPast{
+				excludedPart: []rune(excludedPart),
+			})
+		}
+		wordsSlice[i] = preparedWord{
+			excludePrev:  formattedExcludePrev,
+			excludePast:  excludedPastParts,
+			searchedWord: []rune(userWord.Word),
 		}
 	}
 	wf.words = append(wf.words, wordsSlice...)
@@ -260,15 +280,15 @@ func (wf *WordFilter) AddWord(word string, excludedPrev []string) {
 	wf.addWord([]rune(word), formattedExcludePrev)
 }
 
-func (wf *WordFilter) addWord(word []rune, excludedPrev [][]rune) {
+func (wf *WordFilter) addWord(searchedWord []rune, excludedPrev [][]rune) {
 	sort.SliceStable(excludedPrev, func(i, j int) bool {
 		return len(excludedPrev[i]) > len(excludedPrev[j])
 	})
-	wf.words = append(wf.words, Word{
-		ExcludePrev: excludedPrev,
-		Word:        word,
+	wf.words = append(wf.words, preparedWord{
+		excludePrev:  excludedPrev,
+		searchedWord: searchedWord,
 	})
-	wf.wordsFirstChrsMap = wf.CharsComparer.fillLetterPossibleChars(word[0], wf.wordsFirstChrsMap)
+	wf.wordsFirstChrsMap = wf.CharsComparer.fillLetterPossibleChars(searchedWord[0], wf.wordsFirstChrsMap)
 }
 
 type DetectedWord struct {
@@ -278,19 +298,25 @@ type DetectedWord struct {
 	Ending       string
 }
 
-//TODO сделать tread safe
 func (wf *WordFilter) FilterWords(str string, replaceWord func(DetectedWord) string) string {
 	if len(wf.words) == 0 {
 		return str
 	}
 
-	result := make([]rune, 0);
+	words := make([]wordProcessor, 0, len(wf.words))
+	for _, prepearedWord := range wf.words {
+		words = append(words, wordProcessor{
+			preparedWord: prepearedWord,
+		})
+	}
+
 	var chrBuf []rune
 	runeStr := []rune(str)
 	wordStartSymb := 0
 	detectWord := false
 	detectedWord := DetectedWord{}
-	detectedWordEnding :=  make([]rune, 0)
+	detectedWordEnding := make([]rune, 0)
+	result := make([]rune, 0, utf8.RuneCountInString(str))
 	for strChrNumb, chr := range runeStr {
 		positionBetweenWords := false
 		if _, ok := wf.wordsFirstChrsMap[chr]; !ok && !unicode.IsLetter(chr) {
@@ -309,28 +335,28 @@ func (wf *WordFilter) FilterWords(str string, replaceWord func(DetectedWord) str
 
 		wordsNotInProgress := true
 		chrBuf = append(chrBuf, chr)
-		for i := range wf.words {
-			compareStatus := wf.words[i].compareChar(chr, wf.CharsComparer, func() rune {
+		for i := range words {
+			compareStatus := words[i].compareChar(chr, wf.CharsComparer, func() rune {
 				return runeStr[strChrNumb+1]
 			})
 			switch compareStatus {
 			case success:
-				if !wf.words[i].compareWithExcludePrev(chrBuf[:len(chrBuf)-wf.words[i].symbolCounter]) {
-					wordLenFromWordStart := strChrNumb - wf.words[i].startSymbol + 1
+				if !words[i].compareWithExcludePrev(chrBuf[:len(chrBuf)-words[i].symbolCounter]) {
+					wordLenFromWordStart := strChrNumb - words[i].startSymbol + 1
 
-					detectedWord.Beginning = string(chrBuf[len(chrBuf)-wordLenFromWordStart : len(chrBuf)-wf.words[i].symbolCounter])
-					detectedWord.Word = string(chrBuf[len(chrBuf)-wf.words[i].symbolCounter:])
-					detectedWord.OriginalWord = string(wf.words[i].Word)
+					detectedWord.Beginning = string(chrBuf[len(chrBuf)-wordLenFromWordStart : len(chrBuf)-words[i].symbolCounter])
+					detectedWord.Word = string(chrBuf[len(chrBuf)-words[i].symbolCounter:])
+					detectedWord.OriginalWord = string(words[i].searchedWord)
 
 					chrBuf = chrBuf[:len(chrBuf)-wordLenFromWordStart]
 					wordsNotInProgress = true
 					detectWord = true
 				}
-				wf.resetAllWords()
+				resetAllWords(words)
 			case inProgress:
 				wordsNotInProgress = false
-				if wf.words[i].symbolCounter == 1 {
-					wf.words[i].startSymbol = wordStartSymb
+				if words[i].symbolCounter == 1 {
+					words[i].startSymbol = wordStartSymb
 				}
 			}
 			if compareStatus == success {
@@ -338,18 +364,16 @@ func (wf *WordFilter) FilterWords(str string, replaceWord func(DetectedWord) str
 			}
 		}
 		if wordsNotInProgress && positionBetweenWords {
-			result =  append(result, chrBuf...)
+			result = append(result, chrBuf...)
 			chrBuf = chrBuf[:0]
 		}
 	}
 
-	result =  append(result, chrBuf...)
+	result = append(result, chrBuf...)
 	if detectWord {
 		detectedWord.Ending = string(detectedWordEnding)
 		result = append(result, []rune(replaceWord(detectedWord))...)
 	}
-
-	wf.resetAllWords()
 
 	return string(result)
 }

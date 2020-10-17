@@ -1,4 +1,4 @@
-module commFilter
+module github.com/GrigoryKrasnochub/text-filter
 
 go 1.14
 
