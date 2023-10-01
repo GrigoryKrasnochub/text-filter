@@ -92,6 +92,7 @@ type preparedWord struct {
 }
 
 type wordProcessor struct {
+	options *options
 	preparedWord
 	lastActiveChar        int
 	skipCheckIteration    int
@@ -162,12 +163,12 @@ func (w *wordProcessor) compareChar(chr rune, chrComparer CharsComparer, getNext
 				w.status = inProgress
 				return w.status
 			}
-			if !unicode.IsLetter(chr) && w.charsBetweenSymbols < wordCharsBetweenSymbols && w.lettersBetweenSymbols == 0 {
+			if !unicode.IsLetter(chr) && w.charsBetweenSymbols < w.options.symbolsBetweenKeyLetters && w.lettersBetweenSymbols == 0 {
 				w.charsBetweenSymbols++
 				w.status = inProgress
 				return w.status
 			}
-			if w.lettersBetweenSymbols < wordLettersBetweenSymbols && w.charsBetweenSymbols == 0 {
+			if w.lettersBetweenSymbols < w.options.lettersBetweenKeyLetters && w.charsBetweenSymbols == 0 {
 				w.lettersBetweenSymbols++
 				w.status = inProgress
 				return w.status
@@ -226,13 +227,21 @@ func (w *wordProcessor) compareWithExcludePrev(str []rune) bool {
 //}
 
 type WordFilter struct {
+	options           *options
 	words             []preparedWord
 	CharsComparer     CharsComparer
 	wordsFirstChrsMap map[rune]struct{}
 }
 
-func NewWordFilter(charsMap map[string][]string) WordFilter {
+func NewWordFilter(charsMap map[string][]string, optionFuncs ...OptionFunc) WordFilter {
+	opts := getDefaultOptions()
+
+	for _, option := range optionFuncs {
+		option(opts)
+	}
+
 	return WordFilter{
+		options:           opts,
 		CharsComparer:     NewCharsComparer(charsMap),
 		wordsFirstChrsMap: make(map[rune]struct{}, 0),
 	}
@@ -306,6 +315,7 @@ func (wf *WordFilter) FilterWords(str string, replaceWord func(DetectedWord) str
 	words := make([]wordProcessor, 0, len(wf.words))
 	for _, prepearedWord := range wf.words {
 		words = append(words, wordProcessor{
+			options:      wf.options,
 			preparedWord: prepearedWord,
 		})
 	}
