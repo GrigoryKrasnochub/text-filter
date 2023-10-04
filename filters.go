@@ -359,6 +359,7 @@ func (wf *WordFilter) FilterWords(str string, replaceWord func(DetectedWord) str
 					detectedWord.OriginalWord = string(words[i].searchedWord)
 
 					chrBuf = chrBuf[:len(chrBuf)-wordLenFromWordStart]
+					detectedWordEnding = make([]rune, 0)
 					wordsNotInProgress = true
 					detectWord = true
 				}
